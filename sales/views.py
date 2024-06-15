@@ -1,6 +1,7 @@
 import pandas as pd
 from django.db.models import QuerySet
 from django.views.generic import ListView
+from pandas.io.formats.style import Styler
 
 from sales.models import Customer
 
@@ -30,18 +31,14 @@ class CustomerListView(ListView):
             columns=[field.verbose_name for field in queryset.model._meta.get_fields()],
         )
 
-        return df.to_html(
-            classes='table table-striped table-hover',
-            border=0,
-            index=False,
-            na_rep='-',
-            justify='left',
-            columns=(
-                Customer.id.field.verbose_name,
-                Customer.status.field.verbose_name,
-                Customer.name.field.verbose_name,
-                Customer.source.field.verbose_name,
-                Customer.target_volume.field.verbose_name,
-                Customer.problematic.field.verbose_name,
-            ),
+        columns = ('id', 'status', 'name', 'source', 'target_volume', 'problematic')  # Список отображаемых столбцов
+
+        styler = Styler(df)
+        styler.format(na_rep='-')
+        styler.hide(axis='index')
+        styler.hide(
+            subset=[field.verbose_name for field in Customer._meta.get_fields() if field.name not in columns],
+            axis='columns',
         )
+
+        return styler.to_html(table_attributes='class="table table-striped table-hover"')
