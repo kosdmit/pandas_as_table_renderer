@@ -25,7 +25,7 @@
 ❌ Затруднена поддержка и внесение изменений
 ❌ Повторение работы при необходимости добавить вариацию таблицы (email, Excel и тд.)
 
-## Используем Pandas
+## Используем DataFrame
 
 Поскольку pandas уже входил в технологический стек проекта, было принято решение задействовать эту библиотеку для рендеринга таблиц в html.
 
@@ -48,7 +48,7 @@ class CustomerListView(ListView):
             data=object_list.values_list(),
             columns=[field.verbose_name for field in object_list.model._meta.get_fields()],
         )
-        return df.to_html(index=False)
+        return df.to_html()
 ```
 
 Метод `get_html_table()` возвращает html код таблицы принимая на вход объект типа QuerySet - `object_list` из контекcта ListView Django.
@@ -72,4 +72,45 @@ class CustomerListView(ListView):
 
 ![Изображение 1. Таблица без стилизации](./assets/1.PNG)
 
+*Код проекта из этого раздела доступен на GitHub - [commit# 2005e31](https://github.com/kosdmit/pandas_as_table_renderer/tree/2005e31e9314ce67bda388aca7240ac85474d8d9).*
+
+## Используем средства стилизации
+
+На самом деле метод `DataFrame.to_html` может принимать определенный перечень аргументов для обеспечения удобочитаемости таблицы на выходе. Например можно настроить ширину границ ячеек, отображение индекса, заполнение пустых ячеек, выравнивание наименований столбцов и т.д. (с полным перечнем возможностей можно ознакомиться на соответсвующей странице в [документации](https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.to_html.html)).
+
+```python
+# views.py
+# def get_html_table(queryset):
+
+return df.to_html(
+            classes='table table-striped table-hover',
+            border=0,
+            index=False,
+            na_rep='-',
+            justify='left',
+            columns=(
+                Customer.id.field.verbose_name,
+                Customer.status.field.verbose_name,
+                Customer.name.field.verbose_name,
+                Customer.source.field.verbose_name,
+                Customer.target_volume.field.verbose_name,
+                Customer.problematic.field.verbose_name,
+            ),
+        )
+```
+
+Аргумент `columns` определяет отображаемые столбцы таблицы, таким образом можно использовать один экземпляр DataFrame в различных сценариях вывода, когда требуется ограничить количество отображаемой информации (например для отправки таблицы в email).
+
+С помощью аргумента `classes` можно оперделять css классы html элемента `<table>` и гибко управлять отображением таблицы с помощью css-правил. В приведенном примере я использую готовые стили css-библиотеки Bootstrap 5 для быстрой стилизации таблицы. Таким образом можжно получить результат соотвтветсвующий стилю вашего проекта.
+
+![ Изображение 2. Стилизация таблицы](assets/2.PNG)
+
+✅ Логика рендеринга объектов в html инкапсулирется в соответствующие классы
+✅ Изменение структуры таблиц без редактирования html шаблонов
+❌ Ограниченные возможности контроля рендеринга html
+
 *Код проекта из этого раздела доступен на GitHub - [commit# ](https://github.com/kosdmit/pandas_as_table_renderer/).*
+
+## Используем Styler
+
+В предыдущем разделе мы получили html код который можно использовать например для отображения таблиц в email письмах. Но чаще всего задачи разработки требуют более широкова контроля над процессом server-side рендеринга.

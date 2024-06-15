@@ -29,4 +29,19 @@ class CustomerListView(ListView):
             data=queryset.values_list(),
             columns=[field.verbose_name for field in queryset.model._meta.get_fields()],
         )
-        return df.to_html(index=False)
+
+        return df.to_html(
+            classes='table table-striped table-hover',
+            border=0,
+            index=False,
+            na_rep='-',
+            justify='left',
+            columns=(
+                Customer.id.field.verbose_name,
+                Customer.status.field.verbose_name,
+                Customer.name.field.verbose_name,
+                Customer.source.field.verbose_name,
+                Customer.target_volume.field.verbose_name,
+                Customer.problematic.field.verbose_name,
+            ),
+        )
