@@ -17,9 +17,10 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path
 
-from sales.views import CustomerListView
+from sales.views import CustomerListView, CustomerDetailView
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', CustomerListView.as_view(), name='customer_list'),
+    path('sales/customer/<str:pk>/detail', CustomerDetailView.as_view(), name='customer_detail'),
 ]

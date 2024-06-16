@@ -106,7 +106,7 @@ return df.to_html(
 
 ✅ Логика рендеринга объектов инкапсулирется в соответствующие классы
 ✅ Возможность изменения структуры таблиц без редактирования html шаблонов
-❌ Ограниченные возможности контроля рендеринга html
+❌ Ограниченные возможности контроля рендеринга html и стилизации
 
 *Код проекта из этого раздела доступен на GitHub - [commit# 8108dd0](https://github.com/kosdmit/pandas_as_table_renderer/tree/8108dd08aa063fca0ae7b1b7eb9e70416357704a).*
 
@@ -139,14 +139,120 @@ def get_html_table(queryset: QuerySet) -> str:
     return styler.to_html(table_attributes='class="table table-striped table-hover"')
 ```
 
-Обновленный метод возвращает идентичную таблицу, но предствляется немного более сложным по сравнению с тем, что мы использовали ранее. Не смотря на это, такой вариант является более предпочтительным, т.к. дает намного больше возможностей контроля, в чем мы убедимся далее.
+Обновленный метод возвращает идентичную таблицу, но может показаться немного более сложным по сравнению с тем, что мы использовали ранее. Не смотря на это, такой вариант является более предпочтительным, т.к. дает намного больше возможностей контроля, в чем мы убедимся далее.
 
-Контруктор класса Styler принимает в качестве обязательного аргумента DataFrame Pandas. После инициалзации объект класса предоставляет широкий набор интрументов стилизации:
+Контруктор класса Styler принимает в качестве обязательного аргумента DataFrame Pandas. После инициалзации объект класса предоставляет широкий набор интрументов стилизации. C полным перечнем методов класса Styler вы можете ознакомиться в соответствующем разделе [документации](https://pandas.pydata.org/docs/reference/api/pandas.io.formats.style.Styler.html).
 
-* `Styler.format()` - используется для форматирования значений в ячейках, например задать способ отображения пустых ячеек.
-* `Styler.hide()`  - позволяет убирать из контекста рендеринга определенные элементы исходного DataFrame'a. В нашем случае скрывается индекс и столбцы которые не входят в кортеж `columns`.
-* `Styler.template_html_table` - атрибут позволяет переопредлить стандартный шаблон для рендеринга html. В качетсве шаблонизатора Pandas использует внешниюю библиотеку - популярное и функиональное решение Jinja2.
+*Код проекта из этого раздела доступен на GitHub - [commit# 8ad47cc](https://github.com/kosdmit/pandas_as_table_renderer/tree/8ad47cc3b87b4426cd08bce1878994863652ba6c).*
 
-Для демонстрации общей картины возможностей инструментария Pandas я ограничился кратким перечнем. C полным перечнем методов и атрибутов класса Styler вы можете ознакомиться в соответствующем разделе [документации](https://pandas.pydata.org/docs/reference/api/pandas.io.formats.style.Styler.html).
+✅ Логика рендеринга объектов инкапсулирется в соответствующие классы
+✅ Возможность изменения структуры таблиц без редактирования html шаблонов
+✅ Широкие возможности контроля рендеринга html и стилизации
 
-*Код проекта из этого раздела доступен на GitHub - [commit# ](https://github.com/kosdmit/pandas_as_table_renderer/).*
+## Препарируем Styler
+
+Мы достигли определнного прогресса в деле оптимизации подхода к рендеренгу табличных данных в html. А теперь переходим к наиболее интерсной части, в которой мы немного погрузимся в исходный код Pandas.
+
+Перед этим поставим задачу - отрендерить чуть более интерактивную html-таблицу. Сделаем так, чтобы при клике на строку таблицы, которая по сути явлется представлением объекта ORM, открывалась страница с подробной информацией об объекте.
+
+Под капотом Pandas использует стандарный для индустрии подход с использованием популярного шаблонизатора Jinja2. Посмотрим на шаблоны Jinja2 использующиеся для рендеренга html. Шаблоны используемые для вывода данных хранятся в модуле Pandas `io.formats`, папка `templates`. Таким образом, интересующий нас шаблон `html_table.tpl` можно найти в следующей дирктории:`Pyhton/Lib/site-packages/pandas/io/formats/templates/html_table.tpl`, где `Python` - директория установки вашего интерпретатора Python.
+
+```html
+# venv/Lib/site-packages/pandas/io/formats/templates/html_table.tpl
+
+...
+{% block tr scoped %}
+    <tr>
+{% if exclude_styles %}
+{% for c in r %}{% if c.is_visible != False %}
+      <{{c.type}} {{c.attributes}}>{{c.display_value}}</{{c.type}}>
+{% endif %}{% endfor %}
+{% else %}
+{% for c in r %}{% if c.is_visible != False %}
+      <{{c.type}} {%- if c.id is defined %} id="T_{{uuid}}_{{c.id}}" {%- endif %} class="{{c.class}}" {{c.attributes}}>{{c.display_value}}</{{c.type}}>
+{% endif %}{% endfor %}
+{% endif %}
+    </tr>
+{% endblock tr %}
+...
+```
+
+Для краткости, выше приведен только фрагмент файла `html_table.tpl` отвечающий за рендер элемента `<tr>`. Именно с этим блоком нам предстоит поработать, если мы хотим сделать строки таблицы кликабельными. Из приведенного фрагмента видно, что разработчики Pandas не предусмотрели возможность прямо добалять атрибуты для html-элемента `<tr>`, поэтому нам предстоит создать свой шаблон `html_table.tpl` расширяющий существующий и, используя механизм наследования шаблонов Jinja2, переопределить блок `{% block tr scoped %}`:
+
+```html
+# sales/templates/pandas/html_table.tpl
+
+{% extends 'venv/Lib/site-packages/pandas/io/formats/templates/html_table.tpl' %}
+
+{% block tr scoped %}
+    <tr {{ tr_attributes }}> <!-- customized element -->
+{% if exclude_styles %}
+{% for c in r %}{% if c.is_visible != False %}
+      <{{c.type}} {{c.attributes}}>{{c.display_value}}</{{c.type}}>
+{% endif %}{% endfor %}
+{% else %}
+{% for c in r %}{% if c.is_visible != False %}
+      <{{c.type}} {%- if c.id is defined %} id="T_{{uuid}}_{{c.id}}" {%- endif %} class="{{c.class}}" {{c.attributes}}>{{c.display_value}}</{{c.type}}>
+{% endif %}{% endfor %}
+{% endif %}
+    </tr>
+{% endblock tr %}
+
+{% block after_table %}
+  {{ super() }}
+  <script>
+    function openDetailView($tr) {
+      let pk = $tr.find('td.col0').text();
+      window.location = `/sales/customer/${pk}/detail`;
+    }
+  </script>
+{% endblock after_table %}
+```
+
+Новый шаблон `html_table.tpl` расширяет стандартный шаблон Pandas. Блок `{% block tr scoped %}` переопределяет аналогичный блок из стандарного шаблона, и даёт возможность добавлять атрибуты для html-элемента `<tr>` передавая соответсвующую переменную в контекст рендеринга. Далее мы добаляем функцию JavaScript, которая должна вызываться при клике на строку таблицы и перенаправлять пользователя на соответсвующую страницу.
+
+Теперь создадим кастомный класс-стайлер который будет использовать новый шаблон и непосредственно определим атрибут `onclick` элемента `<tr>`:
+
+```python
+# views.py
+# class CustomerListView(ListView):
+
+def get_html_table(queryset: QuerySet) -> str:
+    df = pd.DataFrame(
+        data=queryset.values_list(),
+        columns=[field.verbose_name for field in queryset.model._meta.get_fields()],
+    )
+
+    columns = ('id', 'status', 'name', 'source', 'target_volume', 'problematic')  # Список отображаемых столбцов
+
+    CustomStyler = Styler.from_custom_template(
+        searchpath=BASE_DIR,
+        html_table='sales/templates/pandas/html_table.tpl'
+    )
+
+    styler = CustomStyler(df)
+    styler.format(na_rep='-')
+    styler.hide(axis='index')
+    styler.hide(
+        subset=[field.verbose_name for field in Customer._meta.get_fields() if field.name not in columns],
+        axis='columns',
+    )
+
+    return styler.to_html(
+        table_attributes='class="table table-striped table-hover"',
+        tr_attributes=f'onclick="openDetailView($(this))" style="cursor:pointer;"',
+    )
+```
+
+Для первой цели класс `Styler` предоставляет специальный метод - `from_custom_template()`, который возвращает новый класс - `MyStyler`. Новый класс наследуется от стандартного `Styler`, но обладает атрибутами класса определющими кастомное окружение и  шаблоны Jinja2.
+
+Теперь стайлер использует для рендеринга новый шаблон, который позволяет использовать переменную `tr_attributes`, передаем ее в контект шаблонизатора через именнованный аргумент метода `Styler.to_html()`.
+
+Исользуя переменную `tr_attributes` мы добавляем атрибуты `onclick` и `style` всем элементам `<tr>` нашей таблицы.
+
+Первый атрибут определяет повдение браузера при клике на строку. В нашем случае вызывается упомянутая выше функция - `openDetailView($tr)`. При этом в качестве аргумента передается сам DOM-объект, для удобства обернутый в jQuery-селектор (я использую JavaScript библиотеку jQuery для краткости и повышения читаемости кода, хотя это не обязательно).
+
+Атрибут `style`, в нашем случае, обеспечивает правильное поведение указателя мышы при наведении на кликабельный объект.
+
+*Код проекта из этого раздела доступен на GitHub - [commit#](https://github.com/kosdmit/pandas_as_table_renderer/).*
+
