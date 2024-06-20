@@ -4,7 +4,7 @@
 
 This repository includes an article and a Django project that demonstrates using Pandas`s DataFrame for rendering tables to html.
 
-# Pandas НЕ для анализа данных
+# Pandas — НЕ для анализа данных (Используем Pandas для server-side рендеринга html)
 
 Этот репозиторий включает статью подготовленную для портала [habr.com](https://habr.com/) и проект Django созданный только для демонстрации кода приведенного в статье.
 
